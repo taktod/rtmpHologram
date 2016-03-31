@@ -16,9 +16,19 @@ typedef struct {
     // 表示windowのサイズ
     UInt32 win_width;
     UInt32 win_height;
+    
+    // キャプチャ時のサイズ
+    UInt32 capture_width;
+    UInt32 capture_height;
+    
+    // テクスチャ
+    GLuint texture;
+    // キャプチャしたbgraデータ
+    void *bgra;
 } myWorker_t;
 
 static myWorker_t workerData;
+static NSObject *imageLock;
 
 @interface MyWorker () {
     UInt32 _width;
@@ -38,31 +48,74 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)connection
 {
 //    NSLog(@"何かキャプチャしてます。");
+    @synchronized (imageLock) {
+        CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+        workerData.capture_width = CVPixelBufferGetWidth(imageBuffer);
+        workerData.capture_height = CVPixelBufferGetHeight(imageBuffer);
+        if(workerData.bgra == NULL) {
+            workerData.bgra = malloc(workerData.capture_width * workerData.capture_height * 4);
+        }
+        CVPixelBufferLockBaseAddress(imageBuffer, 0);
+        uint8_t *baseAddress = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(imageBuffer, 0);
+        memcpy(workerData.bgra, baseAddress, workerData.capture_width * workerData.capture_height * 4);
+        CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
+        NSLog(@"キャプチャできてる。");
+    }
 }
 
 - (void) setupStructure
 {
     NSLog(@"構造体を初期化しておきます。");
+    // 画像データの扱いでglutのスレッドとcaptureのスレッドがぶつからないようにするためのlockオブジェクト
+    imageLock = [NSObject alloc];
+    
     workerData.win_width = 640;
     workerData.win_height = 480;
+    
+    workerData.capture_width = 0;
+    workerData.capture_height = 0;
+
+    workerData.texture = 0;
+    workerData.bgra = NULL;
 }
 
 // glut用の関数いろいろ
 static void display() {
+    @synchronized (imageLock) {
+        if(workerData.bgra != NULL) {
+            NSLog(@"テクスチャ作ってる。");
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, workerData.texture);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexImage2D(GL_TEXTURE_2D, 0, 4, workerData.capture_width, workerData.capture_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, workerData.bgra);
+            glDisable(GL_TEXTURE_2D);
+        }
+    }
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3d(1.0, 1.0, 1.0);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, workerData.texture);
     glBegin(GL_TRIANGLE_FAN);
+    glTexCoord2f(0.0f, 1.0f);
     glVertex2d(-160, -120);
+    glTexCoord2f(1.0f, 1.0f);
     glVertex2d( 160, -120);
+    glTexCoord2f(1.0f, 0.0f);
     glVertex2d( 160,  120);
+    glTexCoord2f(0.0f, 0.0f);
     glVertex2d(-160,  120);
     glEnd();
+    glDisable(GL_TEXTURE_2D);
     glFlush();
 }
 
 static void init() {
     // glの初期化
     glClearColor(0.0, 1.0, 1.0, 1.0);
+    glEnable(GL_TEXTURE_2D);
+    glGenTextures(1, &workerData.texture);
+    glDisable(GL_TEXTURE_2D);
 }
 
 static void resize(int w, int h) {
