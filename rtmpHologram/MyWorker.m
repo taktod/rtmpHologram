@@ -11,9 +11,16 @@
 #import <OpenGL/OpenGL.h>
 
 #include <ttLibC/log.h>
+#include <ttLibC/frame/frame.h>
 #include <ttLibC/frame/video/bgr.h>
 #include <ttLibC/frame/video/yuv420.h>
+#include <ttLibC/frame/audio/audio.h>
+
+#include <ttLibC/util/audioUnitUtil.h>
+#include <ttLibC/encoder/audioConverterEncoder.h>
 #include <ttLibC/encoder/vtCompressSessionH264Encoder.h>
+
+#include <ttLibC/util/stlListUtil.h>
 #include <ttLibC/resampler/imageResampler.h>
 
 // いろいろと利用する構造体
@@ -39,17 +46,22 @@ typedef struct {
     ttLibC_Bgr *bgr;
     ttLibC_Yuv420 *yuv;
     
+    // 音声キャプチャ用
+    UInt32 sample_rate;
+    UInt32 channel_num;
+    ttLibC_AuRecorder *recorder;
+    ttLibC_StlList *frame_list;
+    ttLibC_StlList *used_frame_list;
+
     // エンコーダー
+    ttLibC_AcEncoder *aac_encoder;
     ttLibC_VtH264Encoder *h264_encoder;
 } myWorker_t;
 
 static myWorker_t workerData;
 static NSObject *imageLock;
 
-@interface MyWorker () {
-    UInt32 _width;
-    UInt32 _height;
-}
+@interface MyWorker ()
 
 @property (strong, nonatomic) AVCaptureDeviceInput *videoInput;
 @property (strong, nonatomic) AVCaptureVideoDataOutput *videoDataOutput;
@@ -100,12 +112,56 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     workerData.width  = 480;
     workerData.height = 360;
 
-    workerData.h264_encoder = ttLibC_VtH264Encoder_make(workerData.width, workerData.height);
+    workerData.sample_rate = 44100; // 44.1kHz
+    workerData.channel_num = 1; // モノラル
+    workerData.recorder = NULL;
+    workerData.frame_list = ttLibC_StlList_make();
+    workerData.used_frame_list = ttLibC_StlList_make();
+
+    workerData.aac_encoder = ttLibC_AcEncoder_make(
+                                                   workerData.sample_rate,
+                                                   workerData.channel_num,
+                                                   96000,
+                                                   frameType_aac);
+    workerData.h264_encoder = ttLibC_VtH264Encoder_make(
+                                                        workerData.width,
+                                                        workerData.height);
 }
 
 // 変換関連
 static bool MyWorker_h264EncodeCallback(void *ptr, ttLibC_H264 *h264) {
-    NSLog(@"h264ができてます。");
+//    NSLog(@"h264ができてます。");
+    return true;
+}
+
+static bool MyWorker_aacEncodeCallback(void *ptr, ttLibC_Audio *aac) {
+    NSLog(@"aacができてます。");
+    return true;
+}
+
+static bool MyWorker_makePcmCallback(void *ptr, ttLibC_Audio *audio) {
+    if(audio->inherit_super.type != frameType_pcmS16) {
+        // pcmS16のみ相手する。
+        return false;
+    }
+    ttLibC_Frame *prev_frame = NULL;
+    // 利用ずみframeがある程度ある場合はそれを使う。
+    if(workerData.used_frame_list->size > 3) {
+        prev_frame = (ttLibC_Frame *)ttLibC_StlList_refFirst(workerData.used_frame_list);
+        if(prev_frame != NULL) {
+            // 取得できたら、リストから撤去
+            ttLibC_StlList_remove(workerData.used_frame_list, prev_frame);
+        }
+    }
+    // 別のところで利用するので、cloneのコピーを作る。
+    ttLibC_Frame *cloned_frame = ttLibC_Frame_clone(
+                                                    prev_frame,
+                                                    (ttLibC_Frame *)audio);
+    if(cloned_frame == NULL) {
+        return false;
+    }
+    // 利用可能フレームリストに追加
+    ttLibC_StlList_addLast(workerData.frame_list, cloned_frame);
     return true;
 }
 
@@ -162,6 +218,27 @@ static void display() {
                                 workerData.yuv,
                                 MyWorker_h264EncodeCallback,
                                 NULL);
+    // 音声について処理しておく。
+    ttLibC_Frame *frame = NULL;
+    BOOL is_first_frame = YES;
+    while(workerData.frame_list->size > 2 && (frame = (ttLibC_Frame *)ttLibC_StlList_refFirst(workerData.frame_list)) != NULL) {
+        if(is_first_frame) {
+            // 初めのフレームの時間に画像の時間を合わせておく。
+            workerData.bgr->inherit_super.inherit_super.pts = frame->pts;
+            workerData.bgr->inherit_super.inherit_super.timebase = frame->timebase;
+            is_first_frame = NO;
+        }
+        ttLibC_StlList_remove(workerData.frame_list, frame);
+        // pcmデータなので、aacに変換する。
+        ttLibC_AcEncoder_encode(
+                                workerData.aac_encoder,
+                                (ttLibC_PcmS16 *)frame,
+                                MyWorker_aacEncodeCallback,
+                                NULL);
+        ttLibC_StlList_addLast(
+                               workerData.used_frame_list,
+                               frame);
+    }
 }
 
 static void init() {
@@ -271,6 +348,16 @@ static void keyboard(unsigned char key, int x, int y) {
     [self setupGlut];
     [self setupCamera];
     
+    // 仮としてここで音声のキャプチャを実施する。
+    workerData.recorder = ttLibC_AuRecorder_make(
+                                                 workerData.sample_rate,
+                                                 workerData.channel_num,
+                                                 AuRecorderType_DefaultInput,
+                                                 0);
+    ttLibC_AuRecorder_start(
+                            workerData.recorder,
+                            MyWorker_makePcmCallback,
+                            NULL);
     glutMainLoop();
     return YES;
 }
