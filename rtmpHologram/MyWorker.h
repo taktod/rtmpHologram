@@ -7,8 +7,9 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
 
-@interface MyWorker : NSObject
+@interface MyWorker : NSObject <AVCaptureVideoDataOutputSampleBufferDelegate>
 
 - (BOOL) doWork;
 @end
