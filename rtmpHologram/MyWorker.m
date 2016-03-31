@@ -7,6 +7,7 @@
 //
 
 #import "MyWorker.h"
+#include <ttLibC/log.h>
 
 @interface MyWorker () {
     
@@ -19,6 +20,7 @@
 - (BOOL) doWork
 {
     NSLog(@"start work.");
+    ERR_PRINT("test");
     return YES;
 }
 
