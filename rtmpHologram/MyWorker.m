@@ -20,6 +20,8 @@
 #include <ttLibC/encoder/audioConverterEncoder.h>
 #include <ttLibC/encoder/vtCompressSessionH264Encoder.h>
 
+#include <ttLibC/net/client/rtmp.h>
+
 #include <ttLibC/util/stlListUtil.h>
 #include <ttLibC/resampler/imageResampler.h>
 
@@ -56,10 +58,15 @@ typedef struct {
     // エンコーダー
     ttLibC_AcEncoder *aac_encoder;
     ttLibC_VtH264Encoder *h264_encoder;
+    
+    // rtmp
+    ttLibC_RtmpConnection *conn;
+    ttLibC_RtmpStream *stream;
 } myWorker_t;
 
 static myWorker_t workerData;
 static NSObject *imageLock;
+static NSObject *sendLock;
 
 @interface MyWorker ()
 
@@ -126,16 +133,49 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     workerData.h264_encoder = ttLibC_VtH264Encoder_make(
                                                         workerData.width,
                                                         workerData.height);
+    
+    workerData.conn = NULL;
+    workerData.stream = NULL;
+}
+
+static bool MyWorker_onStatusEventCallback(void *ptr, ttLibC_Amf0Object *obj) {
+    ttLibC_Amf0Object *code = ttLibC_Amf0_getElement(obj, "code");
+    if(code != NULL && code->type == amf0Type_String) {
+        NSLog(@"code:%s", (const char *)code->object);
+    }
+    return true;
+}
+
+- (void) startRtmp
+{
+    workerData.conn = ttLibC_RtmpConnection_make();
+    ttLibC_RtmpConnection_addEventListener(
+                                           workerData.conn,
+                                           MyWorker_onStatusEventCallback,
+                                           NULL);
+    ttLibC_RtmpConnection_connect(
+                                  workerData.conn,
+                                  "rtmp://localhost/live");
 }
 
 // 変換関連
 static bool MyWorker_h264EncodeCallback(void *ptr, ttLibC_H264 *h264) {
 //    NSLog(@"h264ができてます。");
+    @synchronized (sendLock) {
+        ttLibC_RtmpStream_addFrame(
+                                   workerData.stream,
+                                   (ttLibC_Frame *)h264);
+    }
     return true;
 }
 
 static bool MyWorker_aacEncodeCallback(void *ptr, ttLibC_Audio *aac) {
-    NSLog(@"aacができてます。");
+//    NSLog(@"aacができてます。");
+    @synchronized (sendLock) {
+        ttLibC_RtmpStream_addFrame(
+                                   workerData.stream,
+                                   (ttLibC_Frame *)aac);
+    }
     return true;
 }
 
@@ -202,6 +242,11 @@ static void display() {
                  workerData.bgr->inherit_super.inherit_super.data);
     glDisable(GL_TEXTURE_2D);
     glFlush();
+    
+    @synchronized (sendLock) {
+        // rtmpの送受信内容を更新する。
+        ttLibC_RtmpConnection_update(workerData.conn, 10000);
+    }
     
     // bgrをyuvにする
     ttLibC_Yuv420 *y = ttLibC_ImageResampler_makeYuv420FromBgr(
@@ -347,17 +392,9 @@ static void keyboard(unsigned char key, int x, int y) {
     [self setupStructure];
     [self setupGlut];
     [self setupCamera];
-    
-    // 仮としてここで音声のキャプチャを実施する。
-    workerData.recorder = ttLibC_AuRecorder_make(
-                                                 workerData.sample_rate,
-                                                 workerData.channel_num,
-                                                 AuRecorderType_DefaultInput,
-                                                 0);
-    ttLibC_AuRecorder_start(
-                            workerData.recorder,
-                            MyWorker_makePcmCallback,
-                            NULL);
+
+    [self startRtmp];
+
     glutMainLoop();
     return YES;
 }

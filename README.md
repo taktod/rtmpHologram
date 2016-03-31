@@ -42,3 +42,14 @@ $ mvn compile
 $ mvn -Dmaven.test.skip=true clean package -P assemble
 を実行して、サーバープログラムを作成。
 適当に配信と視聴ができることを確認しました。
+
+プログラムを作っていたところ、red5-1.0.7を利用するとttLibCのrtmp接続が拒否されることがわかりました。
+とりあえず1.0.4にバージョンダウンして再チャレンジです。
+(この接続バグは後で直そうかなと思います。)
+
+https://github.com/Red5/red5-server/releases
+から1.0.4Releaseを取得今回はsourceではなく、普通のtar.gzを取得しました。
+$ tar zxvf red5-server-1.0.4-RELEASE-server.tar.gz
+$ cd red5-server-1.0.4-RELEASE/
+$ ./red5.sh
+で実行できました。
