@@ -7,7 +7,18 @@
 //
 
 #import "MyWorker.h"
+#import <GLUT/GLUT.h>
+#import <OpenGL/OpenGL.h>
 #include <ttLibC/log.h>
+
+// いろいろと利用する構造体
+typedef struct {
+    // 表示windowのサイズ
+    UInt32 win_width;
+    UInt32 win_height;
+} myWorker_t;
+
+static myWorker_t workerData;
 
 @interface MyWorker () {
     UInt32 _width;
@@ -26,7 +37,65 @@
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)connection
 {
-    NSLog(@"何かキャプチャしてます。");
+//    NSLog(@"何かキャプチャしてます。");
+}
+
+- (void) setupStructure
+{
+    NSLog(@"構造体を初期化しておきます。");
+    workerData.win_width = 640;
+    workerData.win_height = 480;
+}
+
+// glut用の関数いろいろ
+static void display() {
+    glClear(GL_COLOR_BUFFER_BIT);
+    glFlush();
+}
+
+static void init() {
+    // glの初期化
+    glClearColor(0.0, 1.0, 1.0, 1.0);
+}
+
+static void resize(int w, int h) {
+    glViewport(0, 0, w, h);
+    glLoadIdentity();
+    // 座標をwindowの真ん中を中心にしておく。
+    glOrtho(-w / 2.0, w / 2.0, -h / 2.0, h / 2.0, -1.0, 1.0);
+}
+
+static void idle() {
+    // 暇なら再描画
+    glutPostRedisplay();
+}
+
+static void keyboard(unsigned char key, int x, int y) {
+    switch(key) {
+    case '\x1b': // escを押したらexitで落とす
+        exit(0);
+        return;
+    default:
+        break;
+    }
+}
+
+- (void) setupGlut
+{
+    NSLog(@"glutを使ってopenglの操作を実施します。");
+    // まぁ古いけどね。
+    int argc = 0;
+    glutInit(&argc, NULL);
+    glutInitDisplayMode(GLUT_RGBA);
+    glutInitWindowSize(workerData.win_width, workerData.win_height);
+    glutCreateWindow("source");
+    
+    glutDisplayFunc(display);
+    glutKeyboardFunc(keyboard);
+    glutReshapeFunc(resize);
+    glutIdleFunc(idle);
+
+    init();
 }
 
 - (void) setupCamera
@@ -71,11 +140,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 - (BOOL) doWork
 {
     NSLog(@"start work.");
+    [self setupStructure];
+    [self setupGlut];
     [self setupCamera];
     
-    while(true) {
-        usleep(1000);
-    }
+    glutMainLoop();
     return YES;
 }
 
