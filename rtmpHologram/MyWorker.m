@@ -50,6 +50,13 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 // glut用の関数いろいろ
 static void display() {
     glClear(GL_COLOR_BUFFER_BIT);
+    glColor3d(1.0, 1.0, 1.0);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2d(-160, -120);
+    glVertex2d( 160, -120);
+    glVertex2d( 160,  120);
+    glVertex2d(-160,  120);
+    glEnd();
     glFlush();
 }
 
