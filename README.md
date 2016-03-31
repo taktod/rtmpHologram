@@ -53,3 +53,6 @@ $ tar zxvf red5-server-1.0.4-RELEASE-server.tar.gz
 $ cd red5-server-1.0.4-RELEASE/  
 $ ./red5.sh  
 で実行できました。  
+
+## 注意
+glutが終了時にexit(0);を内部で実行するみたいで、非常に行儀の悪い終わり方をします。

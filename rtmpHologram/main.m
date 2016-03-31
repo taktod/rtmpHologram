@@ -11,7 +11,6 @@
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
-        // insert code here...
         [[MyWorker alloc] doWork];
     }
     return 0;

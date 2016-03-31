@@ -335,7 +335,10 @@ static void display() {
     
     @synchronized (sendLock) {
         // rtmpの送受信内容を更新する。
-        ttLibC_RtmpConnection_update(workerData.conn, 10000);
+        if(!ttLibC_RtmpConnection_update(workerData.conn, 10000)) {
+            ttLibC_RtmpStream_close(&workerData.stream);
+            ttLibC_RtmpConnection_close(&workerData.conn);
+        }
     }
     
     // bgrをyuvにする
@@ -489,5 +492,35 @@ static void keyboard(unsigned char key, int x, int y) {
     return YES;
 }
 
+static bool MyWorker_closeFrameCallback(void *ptr, void *item) {
+    ttLibC_Frame_close((ttLibC_Frame **)&item);
+    return true;
+}
+
+- (void) dealloc {
+    ttLibC_RtmpStream_close(&workerData.stream);
+    ttLibC_RtmpConnection_close(&workerData.conn);
+    
+    ttLibC_AuRecorder_stop(workerData.recorder);
+    ttLibC_AuRecorder_close(&workerData.recorder);
+    
+    ttLibC_VtH264Encoder_close(&workerData.h264_encoder);
+    ttLibC_AcEncoder_close(&workerData.aac_encoder);
+
+    ttLibC_StlList_forEach(workerData.frame_list, MyWorker_closeFrameCallback, NULL);
+    ttLibC_StlList_close(&workerData.frame_list);
+    ttLibC_StlList_forEach(workerData.used_frame_list, MyWorker_closeFrameCallback, NULL);
+    ttLibC_StlList_close(&workerData.used_frame_list);
+
+    if(workerData.bgr != NULL) {
+        free(workerData.bgr->inherit_super.inherit_super.data);
+    }
+    ttLibC_Bgr_close(&workerData.bgr);
+    ttLibC_Yuv420_close(&workerData.yuv);
+    if(workerData.bgra != NULL) {
+        free(workerData.bgra);
+        workerData.bgra = NULL;
+    }
+}
 
 @end
