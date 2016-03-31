@@ -7,11 +7,12 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "MyWorker.h"
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
         // insert code here...
-        NSLog(@"Hello, World!");
+        [[MyWorker alloc] doWork];
     }
     return 0;
 }
