@@ -251,6 +251,7 @@ static void display() {
     glColor3d(1.0, 1.0, 1.0);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, workerData.texture);
+/*
     glBegin(GL_TRIANGLE_FAN);
     glTexCoord2f(0.0f, 1.0f);
     glVertex2d(-160, -120);
@@ -260,6 +261,65 @@ static void display() {
     glVertex2d( 160,  120);
     glTexCoord2f(0.0f, 0.0f);
     glVertex2d(-160,  120);
+    glEnd();*/
+    glBegin(GL_TRIANGLE_FAN);
+    glTexCoord2f(1.0f * 7 / 16, 1.0f);
+    glVertex2d(-20, 20);
+    glTexCoord2f(1.0f * 9 / 16, 1.0f);
+    glVertex2d(20, 20);
+    glTexCoord2f(1.0f, 1.0f * 5 / 12);
+    glVertex2d(160, 160);
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2d(160, 260);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2d(-160, 260);
+    glTexCoord2f(0.0f, 1.05f * 5 / 12);
+    glVertex2d(-160, 160);
+    glEnd();
+    
+    glBegin(GL_TRIANGLE_FAN);
+    glTexCoord2f(1.0f * 7 / 16, 1.0f);
+    glVertex2d(20, 20);
+    glTexCoord2f(1.0f * 9 / 16, 1.0f);
+    glVertex2d(20, -20);
+    glTexCoord2f(1.0f, 1.0f * 5 / 12);
+    glVertex2d(160, -160);
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2d(260, -160);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2d(260, 160);
+    glTexCoord2f(0.0f, 1.05f * 5 / 12);
+    glVertex2d(160, 160);
+    glEnd();
+    
+    glBegin(GL_TRIANGLE_FAN);
+    glTexCoord2f(1.0f * 7 / 16, 1.0f);
+    glVertex2d(20, -20);
+    glTexCoord2f(1.0f * 9 / 16, 1.0f);
+    glVertex2d(-20, -20);
+    glTexCoord2f(1.0f, 1.0f * 5 / 12);
+    glVertex2d(-160, -160);
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2d(-160, -260);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2d(160, -260);
+    glTexCoord2f(0.0f, 1.05f * 5 / 12);
+    glVertex2d(160, -160);
+    glEnd();
+
+    glBegin(GL_TRIANGLE_FAN);
+    glTexCoord2f(1.0f * 7 / 16, 1.0f);
+    glVertex2d(-20, -20);
+    glTexCoord2f(1.0f * 9 / 16, 1.0f);
+    glVertex2d(-20, 20);
+    glTexCoord2f(1.0f, 1.0f * 5 / 12);
+    glVertex2d(-160, 160);
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2d(-260, 160);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2d(-260, -160);
+    glTexCoord2f(0.0f, 1.05f * 5 / 12);
+    glVertex2d(-160, -160);
     glEnd();
     // 表示データの中心をキャプチャ
     glReadPixels(
@@ -331,7 +391,7 @@ static void init() {
                                      0,
                                      1000);
     // glの初期化
-    glClearColor(0.0, 1.0, 1.0, 1.0);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
     glEnable(GL_TEXTURE_2D);
     glGenTextures(1, &workerData.texture);
     glDisable(GL_TEXTURE_2D);
