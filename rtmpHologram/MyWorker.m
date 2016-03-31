@@ -9,7 +9,12 @@
 #import "MyWorker.h"
 #import <GLUT/GLUT.h>
 #import <OpenGL/OpenGL.h>
+
 #include <ttLibC/log.h>
+#include <ttLibC/frame/video/bgr.h>
+#include <ttLibC/frame/video/yuv420.h>
+#include <ttLibC/encoder/vtCompressSessionH264Encoder.h>
+#include <ttLibC/resampler/imageResampler.h>
 
 // いろいろと利用する構造体
 typedef struct {
@@ -25,6 +30,17 @@ typedef struct {
     GLuint texture;
     // キャプチャしたbgraデータ
     void *bgra;
+
+    // 転送するデータサイズ
+    UInt32 width;
+    UInt32 height;
+
+    // フレーム情報
+    ttLibC_Bgr *bgr;
+    ttLibC_Yuv420 *yuv;
+    
+    // エンコーダー
+    ttLibC_VtH264Encoder *h264_encoder;
 } myWorker_t;
 
 static myWorker_t workerData;
@@ -59,7 +75,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         uint8_t *baseAddress = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(imageBuffer, 0);
         memcpy(workerData.bgra, baseAddress, workerData.capture_width * workerData.capture_height * 4);
         CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
-        NSLog(@"キャプチャできてる。");
     }
 }
 
@@ -69,21 +84,35 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     // 画像データの扱いでglutのスレッドとcaptureのスレッドがぶつからないようにするためのlockオブジェクト
     imageLock = [NSObject alloc];
     
-    workerData.win_width = 640;
+    workerData.win_width  = 640;
     workerData.win_height = 480;
     
-    workerData.capture_width = 0;
+    workerData.capture_width  = 0;
     workerData.capture_height = 0;
 
     workerData.texture = 0;
+
     workerData.bgra = NULL;
+    
+    workerData.bgr = NULL;
+    workerData.yuv = NULL;
+    
+    workerData.width  = 480;
+    workerData.height = 360;
+
+    workerData.h264_encoder = ttLibC_VtH264Encoder_make(workerData.width, workerData.height);
+}
+
+// 変換関連
+static bool MyWorker_h264EncodeCallback(void *ptr, ttLibC_H264 *h264) {
+    NSLog(@"h264ができてます。");
+    return true;
 }
 
 // glut用の関数いろいろ
 static void display() {
     @synchronized (imageLock) {
         if(workerData.bgra != NULL) {
-            NSLog(@"テクスチャ作ってる。");
             glEnable(GL_TEXTURE_2D);
             glBindTexture(GL_TEXTURE_2D, workerData.texture);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -106,11 +135,49 @@ static void display() {
     glTexCoord2f(0.0f, 0.0f);
     glVertex2d(-160,  120);
     glEnd();
+    // 表示データの中心をキャプチャ
+    glReadPixels(
+                 (workerData.win_width - workerData.width) / 2,
+                 (workerData.win_height - workerData.height) / 2,
+                 workerData.width,
+                 workerData.height,
+                 GL_BGRA,
+                 GL_UNSIGNED_BYTE,
+                 workerData.bgr->inherit_super.inherit_super.data);
     glDisable(GL_TEXTURE_2D);
     glFlush();
+    
+    // bgrをyuvにする
+    ttLibC_Yuv420 *y = ttLibC_ImageResampler_makeYuv420FromBgr(
+                                                               workerData.yuv,
+                                                               Yuv420Type_planar,
+                                                               workerData.bgr);
+    if(y == NULL) {
+        return;
+    }
+    workerData.yuv = y;
+    // yuvをh264にする
+    ttLibC_VtH264Encoder_encode(
+                                workerData.h264_encoder,
+                                workerData.yuv,
+                                MyWorker_h264EncodeCallback,
+                                NULL);
 }
 
 static void init() {
+    // 転送に利用する画像用のメモリーを作っておく。
+    void *data = malloc(workerData.width * workerData.height * 4);
+    workerData.bgr = ttLibC_Bgr_make(
+                                     NULL,
+                                     BgrType_bgra,
+                                     workerData.width,
+                                     workerData.height,
+                                     workerData.width * 4,
+                                     data,
+                                     workerData.width * workerData.height * 4,
+                                     true,
+                                     0,
+                                     1000);
     // glの初期化
     glClearColor(0.0, 1.0, 1.0, 1.0);
     glEnable(GL_TEXTURE_2D);
