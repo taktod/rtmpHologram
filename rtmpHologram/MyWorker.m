@@ -142,6 +142,36 @@ static bool MyWorker_onStatusEventCallback(void *ptr, ttLibC_Amf0Object *obj) {
     ttLibC_Amf0Object *code = ttLibC_Amf0_getElement(obj, "code");
     if(code != NULL && code->type == amf0Type_String) {
         NSLog(@"code:%s", (const char *)code->object);
+        if(strcmp((const char *)code->object, "NetConnection.Connect.Success") == 0) {
+            // netStreamを作ってpublishを実施します
+            workerData.stream = ttLibC_RtmpStream_make(workerData.conn);
+            ttLibC_RtmpStream_addEventListener(
+                                               workerData.stream,
+                                               MyWorker_onStatusEventCallback,
+                                               NULL);
+            // testという名前で配信
+            ttLibC_RtmpStream_publish(
+                                      workerData.stream,
+                                      "test");
+            return true;
+        }
+        if(strcmp((const char *)code->object, "NetStream.Publish.Start") == 0) {
+            // 配信開始できたら、audioRecorderを開始する
+            workerData.recorder = ttLibC_AuRecorder_make(
+                                                         workerData.sample_rate,
+                                                         workerData.channel_num,
+                                                         AuRecorderType_DefaultInput,
+                                                         0);
+            ttLibC_AuRecorder_start(
+                                    workerData.recorder,
+                                    MyWorker_makePcmCallback,
+                                    NULL);
+            return true;
+        }
+        if(strcmp((const char *)code->object, "NetStream.Unpublish.Success") == 0) {
+            // done.
+            return true;
+        }
     }
     return true;
 }
