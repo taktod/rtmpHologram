@@ -30,9 +30,10 @@ ttLibC入手する。
 $ git clone https://github.com/taktod/ttLibC.git  
 $ git checkout develop  
 $ autoreconf  
-$ ./configure —enable-apple  
+$ ./configure —enable-apple --enable-socket  
 $ make  
 $ sudo make install  
+ttLibCのdevelop版に新しいconfigure optionを追加したので、対応するようにしておきました。
   
 red5を準備する  
 https://github.com/Red5/red5-server/releases  
